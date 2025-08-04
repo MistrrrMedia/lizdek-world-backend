@@ -16,7 +16,7 @@ const { pool } = require('./config/database');
 app.use(helmet());
 app.use(cors({
     origin: process.env.NODE_ENV === 'production' 
-        ? ['https://lizdek.world', 'https://www.lizdek.world']
+        ? ['https://lizdek.world', 'https://www.lizdek.world', 'https://api.lizdek.world']
         : ['http://localhost:5173', 'http://localhost:3000'],
     credentials: true
 }));
