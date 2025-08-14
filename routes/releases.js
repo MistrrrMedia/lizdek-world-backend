@@ -28,6 +28,8 @@ router.get('/', async (req, res) => {
     }
 });
 
+
+
 // GET /api/releases/:urlTitle - Get specific release by URL title (public)
 router.get('/:urlTitle', async (req, res) => {
     try {
@@ -84,16 +86,72 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
             links 
         } = req.body;
         
-        // Validate required fields
-        if (!title || !url_title || !soundcloud_url || !release_date) {
+        // Manual validation
+        if (!title || typeof title !== 'string' || title.trim().length === 0) {
             return res.status(400).json({
-                error: 'Title, URL title, SoundCloud URL, and release date are required'
+                error: 'Title is required and must be a non-empty string'
+            });
+        }
+        
+        if (!url_title || typeof url_title !== 'string' || url_title.trim().length === 0) {
+            return res.status(400).json({
+                error: 'URL title is required and must be a non-empty string'
+            });
+        }
+        
+        if (!soundcloud_url || typeof soundcloud_url !== 'string' || !soundcloud_url.includes('soundcloud.com')) {
+            return res.status(400).json({
+                error: 'SoundCloud URL is required and must be a valid SoundCloud URL'
+            });
+        }
+        
+        if (!release_date || !Date.parse(release_date)) {
+            return res.status(400).json({
+                error: 'Release date is required and must be a valid date'
+            });
+        }
+        
+        // Validate title length
+        if (title.length > 200) {
+            return res.status(400).json({
+                error: 'Title must be 200 characters or less'
+            });
+        }
+        
+        // Validate URL title format (alphanumeric and hyphens only)
+        if (!/^[a-z0-9-]+$/.test(url_title)) {
+            return res.status(400).json({
+                error: 'URL title must contain only lowercase letters, numbers, and hyphens'
             });
         }
         
         const connection = await pool.getConnection();
         
         try {
+            // Check for duplicate title
+            const [existingByTitle] = await connection.query(
+                'SELECT id FROM releases WHERE title = ?',
+                [title]
+            );
+            
+            if (existingByTitle.length > 0) {
+                return res.status(409).json({
+                    error: 'A release with this title already exists'
+                });
+            }
+            
+            // Check for duplicate URL title
+            const [existingByUrlTitle] = await connection.query(
+                'SELECT id FROM releases WHERE url_title = ?',
+                [url_title]
+            );
+            
+            if (existingByUrlTitle.length > 0) {
+                return res.status(409).json({
+                    error: 'A release with this URL title already exists'
+                });
+            }
+            
             // Start transaction
             await connection.beginTransaction();
             
@@ -108,18 +166,31 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
             // Insert links if provided
             if (links && Array.isArray(links)) {
                 for (const link of links) {
-                    if (link.platform && link.url) {
-                        // Validate platform enum values
-                        const validPlatforms = ['spotify', 'soundcloud', 'apple_music', 'youtube'];
-                        if (!validPlatforms.includes(link.platform)) {
-                            throw new Error(`Invalid platform: ${link.platform}. Must be one of: ${validPlatforms.join(', ')}`);
-                        }
-                        
-                        await connection.query(
-                            'INSERT INTO release_links (release_id, platform, url) VALUES (?, ?, ?)',
-                            [releaseId, link.platform, link.url]
-                        );
+                    // Validate link object structure
+                    if (!link.platform || !link.url) {
+                        throw new Error('Each link must have both platform and url properties');
                     }
+                    
+                    // Validate platform enum values
+                    const validPlatforms = ['spotify', 'soundcloud', 'apple_music', 'youtube', 'free_download'];
+                    if (!validPlatforms.includes(link.platform)) {
+                        throw new Error(`Invalid platform: ${link.platform}. Must be one of: ${validPlatforms.join(', ')}`);
+                    }
+                    
+                    // Validate URL format
+                    if (typeof link.url !== 'string' || link.url.trim().length === 0) {
+                        throw new Error('Link URL must be a non-empty string');
+                    }
+                    
+                    // Validate URL length
+                    if (link.url.length > 500) {
+                        throw new Error('Link URL must be 500 characters or less');
+                    }
+                    
+                    await connection.query(
+                        'INSERT INTO release_links (release_id, platform, url) VALUES (?, ?, ?)',
+                        [releaseId, link.platform, link.url]
+                    );
                 }
             }
             
@@ -132,14 +203,14 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
                 [releaseId]
             );
             
-            const [links] = await connection.query(
+            const [releaseLinks] = await connection.query(
                 'SELECT * FROM release_links WHERE release_id = ?',
                 [releaseId]
             );
             
             res.status(201).json({
                 ...releases[0],
-                links
+                links: releaseLinks
             });
         } catch (error) {
             await connection.rollback();
@@ -152,109 +223,6 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
         console.error('Full error:', error);
         res.status(500).json({
             error: 'Failed to create release',
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
-    }
-});
-
-// PUT /api/releases/:id - Update release (admin only)
-router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { 
-            title, 
-            url_title, 
-            soundcloud_url, 
-            collaborators, 
-            release_date,
-            links 
-        } = req.body;
-        
-        // Validate required fields
-        if (!title || !url_title || !soundcloud_url || !release_date) {
-            return res.status(400).json({
-                error: 'Title, URL title, SoundCloud URL, and release date are required'
-            });
-        }
-        
-        const connection = await pool.getConnection();
-        
-        try {
-            // Check if release exists
-            const [existingReleases] = await connection.query(
-                'SELECT * FROM releases WHERE id = ?',
-                [id]
-            );
-            
-            if (existingReleases.length === 0) {
-                return res.status(404).json({
-                    error: 'Release not found'
-                });
-            }
-            
-            // Start transaction
-            await connection.beginTransaction();
-            
-            // Update the release
-            await connection.query(
-                'UPDATE releases SET title = ?, url_title = ?, soundcloud_url = ?, collaborators = ?, release_date = ? WHERE id = ?',
-                [title, url_title, soundcloud_url, collaborators || null, release_date, id]
-            );
-            
-            // Update links if provided
-            if (links && Array.isArray(links)) {
-                // Delete existing links
-                await connection.query(
-                    'DELETE FROM release_links WHERE release_id = ?',
-                    [id]
-                );
-                
-                // Insert new links
-                for (const link of links) {
-                    if (link.platform && link.url) {
-                        // Validate platform enum values
-                        const validPlatforms = ['spotify', 'soundcloud', 'apple_music', 'youtube'];
-                        if (!validPlatforms.includes(link.platform)) {
-                            throw new Error(`Invalid platform: ${link.platform}. Must be one of: ${validPlatforms.join(', ')}`);
-                        }
-                        
-                        await connection.query(
-                            'INSERT INTO release_links (release_id, platform, url) VALUES (?, ?, ?)',
-                            [id, link.platform, link.url]
-                        );
-                    }
-                }
-            }
-            
-            // Commit transaction
-            await connection.commit();
-            
-            // Fetch the updated release with links
-            const [releases] = await connection.query(
-                'SELECT * FROM releases WHERE id = ?',
-                [id]
-            );
-            
-            const [links] = await connection.query(
-                'SELECT * FROM release_links WHERE release_id = ?',
-                [id]
-            );
-            
-            res.json({
-                ...releases[0],
-                links
-            });
-        } catch (error) {
-            await connection.rollback();
-            throw error;
-        } finally {
-            connection.release();
-        }
-    } catch (error) {
-        console.error('Error updating release:', error.message);
-        console.error('Full error:', error);
-        res.status(500).json({
-            error: 'Failed to update release',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }

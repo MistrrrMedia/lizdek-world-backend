@@ -99,12 +99,68 @@ router.get('/:id', async (req, res) => {
 // POST /api/shows - Create new show (admin only)
 router.post('/', authenticateToken, requireAdmin, async (req, res) => {
     try {
-        const { title, date, venue, city, ticket_url, description } = req.body;
+        const { venue, city, state_province, country, ticket_link, show_date } = req.body;
         
-        // Validate required fields
-        if (!venue || !city || !state_province || !country || !show_date) {
+        // Manual validation
+        if (!venue || typeof venue !== 'string' || venue.trim().length === 0) {
             return res.status(400).json({
-                error: 'Venue, city, state/province, country, and show date are required'
+                error: 'Venue is required and must be a non-empty string'
+            });
+        }
+        
+        if (!city || typeof city !== 'string' || city.trim().length === 0) {
+            return res.status(400).json({
+                error: 'City is required and must be a non-empty string'
+            });
+        }
+        
+        if (!state_province || typeof state_province !== 'string' || state_province.trim().length === 0) {
+            return res.status(400).json({
+                error: 'State/province is required and must be a non-empty string'
+            });
+        }
+        
+        if (!country || typeof country !== 'string' || country.trim().length === 0) {
+            return res.status(400).json({
+                error: 'Country is required and must be a non-empty string'
+            });
+        }
+        
+        if (!show_date || !Date.parse(show_date)) {
+            return res.status(400).json({
+                error: 'Show date is required and must be a valid date'
+            });
+        }
+        
+        // Validate field lengths
+        if (venue.length > 200) {
+            return res.status(400).json({
+                error: 'Venue must be 200 characters or less'
+            });
+        }
+        
+        if (city.length > 100) {
+            return res.status(400).json({
+                error: 'City must be 100 characters or less'
+            });
+        }
+        
+        if (state_province.length > 100) {
+            return res.status(400).json({
+                error: 'State/province must be 100 characters or less'
+            });
+        }
+        
+        if (country.length > 100) {
+            return res.status(400).json({
+                error: 'Country must be 100 characters or less'
+            });
+        }
+        
+        // Validate ticket link if provided
+        if (ticket_link && (typeof ticket_link !== 'string' || ticket_link.length > 500)) {
+            return res.status(400).json({
+                error: 'Ticket link must be a string and 500 characters or less'
             });
         }
         
@@ -140,12 +196,70 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
         const { id } = req.params;
         const { venue, city, state_province, country, ticket_link, show_date } = req.body;
         
-        // Validate required fields
-        if (!venue || !city || !state_province || !country || !show_date) {
+        // Manual validation (same as POST)
+        if (!venue || typeof venue !== 'string' || venue.trim().length === 0) {
             return res.status(400).json({
-                error: 'Venue, city, state/province, country, and show date are required'
+                error: 'Venue is required and must be a non-empty string'
             });
         }
+        
+        if (!city || typeof city !== 'string' || city.trim().length === 0) {
+            return res.status(400).json({
+                error: 'City is required and must be a non-empty string'
+            });
+        }
+        
+        if (!state_province || typeof state_province !== 'string' || state_province.trim().length === 0) {
+            return res.status(400).json({
+                error: 'State/province is required and must be a non-empty string'
+            });
+        }
+        
+        if (!country || typeof country !== 'string' || country.trim().length === 0) {
+            return res.status(400).json({
+                error: 'Country is required and must be a non-empty string'
+            });
+        }
+        
+        if (!show_date || !Date.parse(show_date)) {
+            return res.status(400).json({
+                error: 'Show date is required and must be a valid date'
+            });
+        }
+        
+        // Validate field lengths
+        if (venue.length > 200) {
+            return res.status(400).json({
+                error: 'Venue must be 200 characters or less'
+            });
+        }
+        
+        if (city.length > 100) {
+            return res.status(400).json({
+                error: 'City must be 100 characters or less'
+            });
+        }
+        
+        if (state_province.length > 100) {
+            return res.status(400).json({
+                error: 'State/province must be 100 characters or less'
+            });
+        }
+        
+        if (country.length > 100) {
+            return res.status(400).json({
+                error: 'Country must be 100 characters or less'
+            });
+        }
+        
+        // Validate ticket link if provided
+        if (ticket_link && (typeof ticket_link !== 'string' || ticket_link.length > 500)) {
+            return res.status(400).json({
+                error: 'Ticket link must be a string and 500 characters or less'
+            });
+        }
+        
+
         
         const connection = await pool.getConnection();
         

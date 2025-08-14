@@ -1,19 +1,51 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 const { pool } = require('../config/database');
 
 const router = express.Router();
 
+// Stricter rate limiting for authentication endpoints
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // limit each IP to 5 requests per windowMs
+    message: {
+        error: 'Too many authentication attempts, please try again later.',
+        retryAfter: '15 minutes'
+    },
+    skipSuccessfulRequests: true, // Don't count successful requests
+});
+
 // Login endpoint
-router.post('/login', async (req, res) => {
+router.post('/login', (process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development') ? (req, res, next) => next() : authLimiter, async (req, res) => {
     try {
         const { username, password } = req.body;
 
-        // Validate input
-        if (!username || !password) {
+        // Manual validation
+        if (!username || typeof username !== 'string' || username.trim().length === 0) {
             return res.status(400).json({
-                error: 'Username and password are required'
+                error: 'Username is required and must be a non-empty string'
+            });
+        }
+        
+        if (!password || typeof password !== 'string' || password.trim().length === 0) {
+            return res.status(400).json({
+                error: 'Password is required and must be a non-empty string'
+            });
+        }
+        
+        // Validate username length
+        if (username.length > 50) {
+            return res.status(400).json({
+                error: 'Username must be 50 characters or less'
+            });
+        }
+        
+        // Validate password length (minimum security)
+        if (password.length < 6) {
+            return res.status(400).json({
+                error: 'Password must be at least 6 characters long'
             });
         }
 
@@ -78,7 +110,7 @@ router.post('/login', async (req, res) => {
 });
 
 // Verify token endpoint
-router.get('/verify', async (req, res) => {
+router.get('/verify', (process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development') ? (req, res, next) => next() : authLimiter, async (req, res) => {
     try {
         const authHeader = req.headers.authorization;
 
