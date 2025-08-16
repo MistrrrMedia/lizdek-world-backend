@@ -6,9 +6,10 @@ Express.js API backend for the Lizdek World music platform, providing authentica
 
 ### Core Services
 - **Authentication**: JWT-based user authentication and session management
-- **Release Management**: CRUD operations for music releases with metadata
-- **Show Management**: Event and performance information management
+- **Release Management**: CRUD operations for music releases with metadata and link management
+- **Show Management**: CRUD operations for live performances with ticket link support
 - **Database Integration**: MySQL connection pooling and optimization
+- **Docker Support**: Containerized deployment with production and development configurations
 
 ### Security & Performance
 - **Helmet**: Security headers and middleware
